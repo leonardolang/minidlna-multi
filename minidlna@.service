@@ -1,0 +1,17 @@
+[Unit]
+Description=minidlna server for %I
+After=network.target
+After=local-fs.target
+
+[Service]
+Type=simple
+User=minidlna
+Group=minidlna
+ExecStart=/usr/bin/minidlnad -P /run/minidlna/minidlna-%I.pid -D /var/cache/minidlna/%I -f /etc/minidlna-%I.conf -S
+ProtectSystem=full
+ProtectHome=on
+PrivateDevices=on
+NoNewPrivileges=on
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,82 @@
+diff --git a/minidlna.c b/minidlna.c
+index 10b4806..84d2748 100644
+--- a/minidlna.c
++++ b/minidlna.c
+@@ -481,6 +481,8 @@ static void init_nls(void)
+ #endif
+ }
+ 
++#define CRC32_POLYVAL 0x04C11DB7
++
+ /* init phase :
+  * 1) read configuration file
+  * 2) read command line arguments
+@@ -492,7 +494,8 @@ static void init_nls(void)
+ static int
+ init(int argc, char **argv)
+ {
+-	int i;
++	int i, j;
++	int len;
+ 	int pid;
+ 	int debug_flag = 0;
+ 	int verbose_flag = 0;
+@@ -510,6 +513,7 @@ init(int argc, char **argv)
+ 	int ifaces = 0;
+ 	media_types types;
+ 	uid_t uid = 0;
++	unsigned int sum = 0u;
+ 
+ 	/* first check if "-f" option is used */
+ 	for (i=2; i<argc; i++)
+@@ -522,14 +526,25 @@ init(int argc, char **argv)
+ 		}
+ 	}
+ 
+-	/* set up uuid based on mac address */
++	/* set up uuid based on mac address and config file name */
+ 	if (getsyshwaddr(mac_str, sizeof(mac_str)) < 0)
+ 	{
+ 		DPRINTF(E_OFF, L_GENERAL, "No MAC address found.  Falling back to generic UUID.\n");
+ 		strcpy(mac_str, "554e4b4e4f57");
+ 	}
+-	strcpy(uuidvalue+5, "4d696e69-444c-164e-9d41-");
+-	strncat(uuidvalue, mac_str, 12);
++
++	/* simple crc32 using config filename */
++	len = strlen(optionsfile);
++	for (i = 0; i < len; ++i)
++	{
++		sum ^= (unsigned int)(((unsigned char)optionsfile[i]) << 24);
++
++		for (j = 0; j < 8; ++j)
++			sum = (sum & 0x80000000) ? (sum << 1) ^ CRC32_POLYVAL : sum << 1;
++	}
++
++	// NOTE: we assume the size of uuidvalue here since it's an incomplete type
++	sprintf(uuidvalue, "uuid:%08x-444c-164e-9d41-%s", sum, mac_str);
+ 
+ 	getfriendlyname(friendly_name, FRIENDLYNAME_MAX_LEN);
+ 	
+@@ -816,6 +831,12 @@ init(int argc, char **argv)
+ 			else
+ 				DPRINTF(E_FATAL, L_GENERAL, "Option -%c takes one argument.\n", argv[i][1]);
+ 			break;
++		case 'D':
++			if (i+1 < argc)
++				strncpyt(db_path, argv[++i], PATH_MAX);
++			else
++				DPRINTF(E_FATAL, L_GENERAL, "Option -%c takes one argument.\n", argv[i][1]);
++			break;
+ 		case 'd':
+ 			debug_flag = 1;
+ 		case 'v':
+@@ -898,7 +919,7 @@ init(int argc, char **argv)
+ 			"%s [-d] [-v] [-f config_file] [-p port]\n"
+ 			"\t\t[-i network_interface] [-u uid_to_run_as]\n"
+ 			"\t\t[-t notify_interval] [-P pid_filename]\n"
+-			"\t\t[-s serial] [-m model_number]\n"
++			"\t\t[-s serial] [-m model_number] [-D db_path]\n"
+ #ifdef __linux__
+ 			"\t\t[-w url] [-r] [-R] [-L] [-S] [-V] [-h]\n"
+ #else
